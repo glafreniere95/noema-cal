@@ -1,0 +1,115 @@
+/* public/admin-v2.css */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f5f7fb;
+  color: #111827;
+  padding: 24px 16px 40px;
+}
+
+.admin-header {
+  max-width: 1100px; margin: 0 auto 24px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.brand { display: flex; gap: 10px; align-items: center; }
+.brand h1 { font-size: 1.3rem; font-weight: 700; }
+.view-public {
+  text-decoration: none; background: #eef2ff; padding: 8px 14px;
+  border-radius: 10px; color: #3730a3; font-weight: 600;
+  border: 1px solid #c7d2fe; transition: 0.15s;
+}
+.view-public:hover { background: #e0e7ff; }
+
+/* Layout 2 colonnes */
+.admin-layout {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 24px;
+}
+@media (min-width: 800px) {
+  .admin-layout { flex-direction: row; align-items: flex-start; }
+}
+
+/* Calendrier */
+.calendar-shell {
+  flex: 1; background: #ffffff; border-radius: 24px;
+  padding: 24px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+}
+.calendar-nav {
+  display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px;
+}
+.calendar-nav h2 { font-weight: 600; }
+.calendar-nav button {
+  border: 1px solid #d1d5db; background: #fff; width: 36px; height: 36px;
+  border-radius: 999px; cursor: pointer;
+}
+.calendar-grid { display: grid; gap: 16px; }
+
+.month-card { background: #f9fafb; border-radius: 22px; padding: 18px; }
+.month-header { text-align: center; font-weight: 600; margin-bottom: 12px; }
+.weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px; font-size: 0.72rem; color: #9ca3af; text-align: center;
+}
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.day {
+  aspect-ratio: 1/1; border: 0px; border-radius: 14px; display: flex;
+  align-items: center; justify-content: center; cursor: pointer;
+  background: #f3f4f6; transition: 0.12s; font-weight: 500;
+}
+
+/* Statuts des jours dans l'admin */
+.day.past { background-color: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.day.has-blocks { background: #fef08a; color: #854d0e; } /* Jaune s'il y a des heures bloquées */
+.day.full-blocked { background: #fecaca; color: #991b1b; } /* Rouge si journée complète bloquée */
+.day.selected { outline: 3px solid #4f46e5; outline-offset: -1px; }
+
+.day:not(.past):hover { background: #e0e7ff; }
+
+/* Panneau de droite : Heures */
+.slots-panel {
+  width: 100%; max-width: 380px; background: #ffffff;
+  border-radius: 24px; padding: 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+}
+.slots-panel h2 { font-size: 1.2rem; margin-bottom: 16px; color: #111827; }
+
+.panel-controls {
+  margin-bottom: 20px; padding: 12px; background: #f3f4f6;
+  border-radius: 12px;
+}
+.toggle-fullday {
+  display: flex; align-items: center; gap: 10px; font-weight: 600;
+  cursor: pointer; color: #b91c1c;
+}
+.toggle-fullday input { transform: scale(1.2); }
+
+.slots-list {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  max-height: 400px; overflow-y: auto; padding-right: 8px;
+}
+
+/* Custom Scrollbar */
+.slots-list::-webkit-scrollbar { width: 6px; }
+.slots-list::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+
+.slot-btn {
+  padding: 10px; border: 2px solid #d1fae5; background: #ecfdf5;
+  color: #065f46; border-radius: 10px; cursor: pointer; font-weight: 600;
+  transition: 0.1s;
+}
+.slot-btn.blocked {
+  background: #fee2e2; border-color: #fca5a5; color: #991b1b;
+  text-decoration: line-through;
+}
+
+.panel-actions {
+  margin-top: 24px; display: flex; flex-direction: column; gap: 10px;
+}
+.save-btn {
+  background: #4f46e5; color: white; border: none; padding: 12px;
+  border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer;
+}
+.save-btn:hover { background: #4338ca; }
+.save-status { font-size: 0.85rem; color: #10b981; text-align: center; font-weight: 600;}
