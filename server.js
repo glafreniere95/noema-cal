@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
-const basicAuth = require("express-basic-auth"); // Nouvelle librairie
+const basicAuth = require("express-basic-auth");
 require("dotenv").config();
 
 const app = express();
@@ -10,7 +10,6 @@ const PORT = process.env.PORT || 4000;
 
 // --- 1. VARIABLES D'ENVIRONNEMENT ---
 const MONGO_URI = process.env.MONGO_URI;
-// On définit un user/pass par défaut si jamais tu oublies de les mettre dans Render
 const ADMIN_USER = process.env.ADMIN_USER || "lgervais";
 const ADMIN_PASS = process.env.ADMIN_PASS || "Geo8300!";
 
@@ -23,34 +22,43 @@ if (!MONGO_URI) {
     .catch(err => console.error("Erreur MongoDB:", err));
 }
 
-// Schéma
+// --- SCHÉMAS MONGO DB ---
+
+// V1 : Schéma original (Jours complets)
 const availabilitySchema = new mongoose.Schema({
   date: { type: String, required: true, unique: true },
   status: { type: String, required: true }
 });
 const Availability = mongoose.model("Availability", availabilitySchema);
 
+// V2 : Nouveau schéma (Heures par jour)
+// 'blockedSlots' sera un tableau d'heures sous format "HH:mm" (ex: ["08:00", "08:30", "09:00"])
+const availabilityV2Schema = new mongoose.Schema({
+  date: { type: String, required: true, unique: true },
+  blockedSlots: { type: [String], default: [] },
+  isFullDayBlocked: { type: Boolean, default: false } // Option pour bloquer toute la journée d'un coup
+});
+const AvailabilityV2 = mongoose.model("AvailabilityV2", availabilityV2Schema);
+
+
 app.use(cors());
 app.use(express.json());
 
 // --- 2. SÉCURITÉ (MIDDLEWARE) ---
-// On configure la sécurité
 const authMiddleware = basicAuth({
-    users: { [ADMIN_USER]: ADMIN_PASS }, // Le nom et le mot de passe
-    challenge: true // Fait apparaitre la pop-up du navigateur
+    users: { [ADMIN_USER]: ADMIN_PASS },
+    challenge: true
 });
 
-// IMPORTANT : On intercepte la demande pour admin.html AVANT que le dossier public ne soit servi
+// On protège admin.html ET admin-v2.html
 app.use("/admin.html", authMiddleware);
+app.use("/admin-v2.html", authMiddleware);
 
-// On sert le dossier public (tout le reste est accessible sans mot de passe)
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/health", (req, res) => { res.json({ status: "ok" }); });
 
-// --- 3. ROUTES API ---
-
-// Lecture (Publique : tout le monde peut voir le calendrier)
+// --- 3. ROUTES API V1 (Intactes) ---
 app.get("/api/availability", async (req, res) => {
   try {
     const items = await Availability.find({}, 'date status -_id');
@@ -65,8 +73,6 @@ app.get("/api/availability/:date", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erreur serveur" }); }
 });
 
-// Écriture (PROTÉGÉE : Il faut le mot de passe pour modifier)
-// On ajoute 'authMiddleware' comme 2ème argument
 app.put("/api/availability", authMiddleware, async (req, res) => {
   const { date, status } = req.body;
   if (!date || !status) return res.status(400).json({ error: "Missing data" });
@@ -82,7 +88,33 @@ app.put("/api/availability", authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Save failed" }); }
 });
 
-// Route par défaut (affiche l'embed public)
+
+// --- 4. ROUTES API V2 (Nouvelles) ---
+
+// Lecture V2
+app.get("/api/v2/availability", async (req, res) => {
+  try {
+    const items = await AvailabilityV2.find({}, 'date blockedSlots isFullDayBlocked -_id');
+    res.json(items);
+  } catch (err) { res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+// Écriture V2 (Protégée)
+app.put("/api/v2/availability", authMiddleware, async (req, res) => {
+  const { date, blockedSlots, isFullDayBlocked } = req.body;
+  if (!date) return res.status(400).json({ error: "Missing date" });
+
+  try {
+    await AvailabilityV2.findOneAndUpdate(
+      { date }, 
+      { blockedSlots: blockedSlots || [], isFullDayBlocked: isFullDayBlocked || false }, 
+      { upsert: true, new: true }
+    );
+    res.json({ date, blockedSlots, isFullDayBlocked });
+  } catch (err) { res.status(500).json({ error: "Save failed" }); }
+});
+
+// Route par défaut
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "embed.html"));
 });
