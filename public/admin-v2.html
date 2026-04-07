@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin V2 – Studio Availability</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="admin-v2.css" />
+  </head>
+  <body>
+    <div class="admin-root">
+
+      <header class="admin-header">
+        <div class="brand">
+          <span class="logo">📅</span>
+          <h1>StudioCal – Admin V2</h1>
+        </div>
+        <a href="embed-v2.html" class="view-public" target="_blank">Voir la page publique V2 ⤴</a>
+      </header>
+
+      <div class="admin-layout">
+        <main class="calendar-shell">
+          <div class="calendar-nav">
+            <button id="prevMonth" aria-label="Mois précédent">‹</button>
+            <h2 id="currentRange"></h2>
+            <button id="nextMonth" aria-label="Mois suivant">›</button>
+          </div>
+
+          <div class="calendar-grid" id="calendarGrid">
+            </div>
+        </main>
+
+        <aside class="slots-panel" id="slotsPanel" style="display: none;">
+          <h2 id="selectedDateLabel">Sélectionnez une date</h2>
+          
+          <div class="panel-controls">
+            <label class="toggle-fullday">
+              <input type="checkbox" id="fullDayToggle">
+              Bloquer toute la journée
+            </label>
+          </div>
+
+          <div class="slots-list" id="slotsList">
+            </div>
+
+          <div class="panel-actions">
+            <button id="saveBtn" class="save-btn">Enregistrer les modifications</button>
+            <span id="saveStatus" class="save-status"></span>
+          </div>
+        </aside>
+      </div>
+
+    </div>
+    <script src="admin-v2.js"></script>
+  </body>
+</html>
