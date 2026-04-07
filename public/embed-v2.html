@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Studio Availability | The Ethereal Studio</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-variant": "#e2e8ea",
+                        "on-surface": "#2b3437",
+                        "surface-container": "#f1f4f5",
+                        "surface-container-low": "#f8f9fa",
+                        "background": "#fdfdfd",
+                        "tertiary-fixed": "#ffedcf",
+                        "outline": "#737c7f",
+                        "primary-container": "#e8eef0",
+                        "primary": "#4c5355",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#ebf0f2",
+                        "secondary": "#21a166",
+                        "secondary-container": "#dcf9e8",
+                        "error": "#d34141",
+                        "error-container": "#ffe8e8",
+                        "surface-dim": "#e9edef",
+                        "outline-variant": "#d1d9dd",
+                        "on-surface-variant": "#6c787c",
+                        "surface": "#ffffff",
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        body { font-family: 'Inter', sans-serif; background-color: #fdfdfd; }
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #d1dce0 transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1dce0; border-radius: 16px; }
+        .ambient-shadow { box-shadow: 0px 24px 48px rgba(43, 52, 55, 0.05); }
+
+        @media (max-width: 767px) {
+            #timeline-pane { position: fixed; inset: 0; z-index: 50; display: none; margin: 0; width: 100%; height: 100%; background-color: #ffffff; padding: 1.5rem; }
+            #timeline-pane.show { display: flex; }
+            #timeline-close { display: flex; }
+        }
+        @media (min-width: 768px) { #timeline-close { display: none; } }
+    </style>
+</head>
+<body class="bg-background text-on-surface flex items-center justify-center min-h-screen p-4 sm:p-8">
+
+<div class="max-w-[1120px] w-full h-auto lg:h-[870px] bg-surface-container-low rounded-xl ambient-shadow flex flex-col md:flex-row overflow-hidden border border-surface-container-high">
+    
+    <div class="flex-1 md:w-1/2 lg:flex-1 p-8 flex flex-col gap-8 bg-surface">
+        <div class="flex items-center justify-between">
+            <div class="flex flex-col">
+                <span class="font-label text-[0.75rem] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Studio Availability</span>
+                <h1 id="currentMonthLabel" class="font-headline text-2xl font-bold text-on-surface">Mois Année</h1>
+            </div>
+            <div class="flex gap-2">
+                <button id="prevMonthBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors">
+                    <span class="material-symbols-outlined text-on-surface">chevron_left</span>
+                </button>
+                <button id="nextMonthBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors">
+                    <span class="material-symbols-outlined text-on-surface">chevron_right</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-secondary-container"></div>
+                <span class="font-label text-[0.7rem] uppercase tracking-wider text-on-surface-variant">Available</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-error-container"></div>
+                <span class="font-label text-[0.7rem] uppercase tracking-wider text-on-surface-variant">Unavailable / Booked</span>
+            </div>
+        </div>
+
+        <div id="calendarGrid" class="flex-1 grid grid-cols-7 gap-3 md:gap-y-1 lg:gap-y-3">
+            </div>
+    </div>
+
+    <div class="w-full md:w-1/2 lg:w-[400px] bg-surface-container-low p-8 flex flex-col border-l border-surface-container-high relative" id="timeline-pane">
+        <button class="absolute top-4 right-4 w-10 h-10 items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-on-surface hidden" id="timeline-close" onclick="document.getElementById('timeline-pane').classList.remove('show')">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+        
+        <div class="mb-6">
+            <h2 id="timelineDateLabel" class="font-headline text-xl font-bold text-on-surface">Sélectionnez une date</h2>
+            <p id="timelineTotalFree" class="font-body text-sm text-on-surface-variant">-- hours available</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar pr-4 -mr-4 relative">
+            <div id="timelineGrid" class="flex flex-col gap-0 min-h-full">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script src="embed-v2.js"></script>
+</body>
+</html>
