@@ -11,6 +11,7 @@ let selectedDateKey = null;
 let mobileCalendarScrollY = 0;
 let wasMobileLayout = window.matchMedia("(max-width: 767px)").matches;
 let resizeFrame = null;
+let timelineCloseTimer = null;
 
 const MONTHS_FR = [
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -43,6 +44,10 @@ function getToday() {
 
 function isMobileLayout() {
     return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function formatHours(hours) {
@@ -124,7 +129,18 @@ async function loadAvailability() {
             dataByDate[item.date] = item;
         }
 
+        // Tablette et desktop démarrent directement sur aujourd'hui.
+        if (!isMobileLayout()) {
+            const today = getToday();
+            selectedDateKey = toKey(today);
+            currentBaseDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        }
+
         renderCalendar();
+
+        if (!isMobileLayout() && selectedDateKey) {
+            renderTimeline(selectedDateKey, fromKey(selectedDateKey), { animate: false });
+        }
     } catch (err) {
         console.error("Erreur de chargement", err);
     }
@@ -132,7 +148,7 @@ async function loadAvailability() {
 
 // --- 3. CALENDRIER ---
 
-function renderCalendar() {
+function renderCalendar({ animate = false } = {}) {
     const root = document.getElementById("calendarGrid");
     const monthLabel = document.getElementById("currentMonthLabel");
 
@@ -151,11 +167,27 @@ function renderCalendar() {
 
         const nextMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 1);
         root.appendChild(buildMonthSection(nextMonth, true));
-        return;
+    } else {
+        // Tablette et desktop: un mois, avec la timeline visible à droite.
+        root.appendChild(buildMonthSection(baseMonth, false));
     }
 
-    // Tablette et desktop: un mois, avec la timeline visible à droite.
-    root.appendChild(buildMonthSection(baseMonth, false));
+    if (animate) {
+        animateCalendarRefresh();
+    }
+}
+
+function animateCalendarRefresh() {
+    if (prefersReducedMotion()) return;
+
+    const root = document.getElementById("calendarGrid");
+    root.classList.remove("calendar-refresh");
+    void root.offsetWidth;
+    root.classList.add("calendar-refresh");
+
+    window.setTimeout(() => {
+        root.classList.remove("calendar-refresh");
+    }, 240);
 }
 
 function buildMonthSection(monthDate, showTitle) {
@@ -200,6 +232,7 @@ function buildMonthSection(monthDate, showTitle) {
 
         button.type = "button";
         button.className = "day-cell";
+        button.dataset.dateKey = dateKey;
         button.textContent = String(day);
         button.setAttribute(
             "aria-label",
@@ -243,46 +276,78 @@ function createEmptyDayCell() {
     return empty;
 }
 
-function selectDate(dateObj) {
+function syncCalendarSelection() {
+    document.querySelectorAll(".day-cell.day-selected").forEach((button) => {
+        button.classList.remove("day-selected");
+        button.removeAttribute("aria-current");
+    });
+
+    if (!selectedDateKey) return;
+
+    document.querySelectorAll(`.day-cell[data-date-key="${selectedDateKey}"]`).forEach((button) => {
+        button.classList.add("day-selected");
+        button.setAttribute("aria-current", "date");
+    });
+}
+
+function selectDate(dateObj, { direction = null, animate = true } = {}) {
     const normalizedDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    const previousDate = selectedDateKey ? fromKey(selectedDateKey) : null;
+
+    if (direction === null && previousDate) {
+        direction = normalizedDate > previousDate ? 1 : normalizedDate < previousDate ? -1 : 0;
+    }
+
     selectedDateKey = toKey(normalizedDate);
 
-    keepSelectedDateInsideMobileCalendarWindow(normalizedDate);
-    renderCalendar();
-    renderTimeline(selectedDateKey, normalizedDate);
+    const calendarWindowChanged = keepSelectedDateInsideMobileCalendarWindow(normalizedDate);
+
+    if (calendarWindowChanged) {
+        renderCalendar({ animate: true });
+    } else {
+        syncCalendarSelection();
+    }
+
+    renderTimeline(selectedDateKey, normalizedDate, {
+        direction: direction || 0,
+        animate
+    });
 }
 
 function keepSelectedDateInsideMobileCalendarWindow(dateObj) {
-    if (!isMobileLayout()) return;
+    if (!isMobileLayout()) return false;
 
     const baseStart = new Date(currentBaseDate.getFullYear(), currentBaseDate.getMonth(), 1);
     const windowEnd = new Date(currentBaseDate.getFullYear(), currentBaseDate.getMonth() + 2, 0);
 
     if (dateObj < baseStart) {
         currentBaseDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
-        return;
+        return true;
     }
 
     if (dateObj > windowEnd) {
         currentBaseDate = new Date(dateObj.getFullYear(), dateObj.getMonth() - 1, 1);
+        return true;
     }
+
+    return false;
 }
 
 // --- 4. TIMELINE ---
 
-function renderTimeline(dateKey, dateObj) {
+function renderTimeline(dateKey, dateObj, { direction = 0, animate = true } = {}) {
     const pane = document.getElementById("timeline-pane");
     const timelineGrid = document.getElementById("timelineGrid");
     const dateLabel = document.getElementById("timelineDateLabel");
     const totalFreeLabel = document.getElementById("timelineTotalFree");
+    const panelWasOpen = pane.classList.contains("show");
 
     dateLabel.textContent = `${dateObj.getDate()} ${MONTHS_FR[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
     timelineGrid.innerHTML = "";
 
     const slots = calculateDailySlots(dateKey);
 
-    // Correction du décompte: l'ancienne boucle omettait le premier slot 08:00-08:30,
-    // ce qui affichait 11.5h pour une journée réellement libre pendant 12h.
+    // Les 24 demi-heures de 08:00 à 20:00 représentent exactement 12 heures.
     const totalFreeSlots = slots.filter((status) => status === "available").length;
     totalFreeLabel.textContent = `${formatHours(totalFreeSlots * 0.5)} hours available`;
 
@@ -292,11 +357,48 @@ function renderTimeline(dateKey, dateObj) {
         timelineGrid.appendChild(createTimelineChunk(chunk));
     });
 
-    renderMobileDateNavigator(dateObj);
-
     if (isMobileLayout()) {
+        renderMobileDateNavigator(dateObj, { smooth: panelWasOpen });
         openMobileTimeline(pane);
     }
+
+    // À la première ouverture mobile, le panneau lui-même fait l'animation.
+    // Pour les changements de journée, on anime doucement le contenu.
+    if (animate && (!isMobileLayout() || panelWasOpen)) {
+        animateTimelineChange(direction);
+    }
+}
+
+function animateTimelineChange(direction = 0) {
+    if (prefersReducedMotion()) return;
+
+    const shift = direction > 0 ? 12 : direction < 0 ? -12 : 0;
+    const targets = [
+        document.querySelector(".timeline-header"),
+        isMobileLayout() ? document.getElementById("mobileDateNavigator") : null,
+        document.querySelector(".timeline-track")
+    ].filter(Boolean);
+
+    targets.forEach((element, index) => {
+        element.getAnimations().forEach((animation) => animation.cancel());
+        element.animate(
+            [
+                {
+                    opacity: 0.68,
+                    transform: `translateX(${shift}px)`
+                },
+                {
+                    opacity: 1,
+                    transform: "translateX(0)"
+                }
+            ],
+            {
+                duration: 210 + (index * 20),
+                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+                fill: "both"
+            }
+        );
+    });
 }
 
 function buildTimelineChunks(slots) {
@@ -389,7 +491,7 @@ function createTimelineChunk(chunk) {
 
 // --- 5. CARROUSEL DE DATES MOBILE ---
 
-function renderMobileDateNavigator(selectedDate) {
+function renderMobileDateNavigator(selectedDate, { smooth = true } = {}) {
     const strip = document.getElementById("mobileDateStrip");
     const prevButton = document.getElementById("mobilePrevDayBtn");
     const today = getToday();
@@ -433,7 +535,9 @@ function renderMobileDateNavigator(selectedDate) {
         } else {
             button.classList.add(hasAvailability(dateKey) ? "available" : "unavailable");
             button.addEventListener("click", () => {
-                selectDate(dateObj);
+                const currentDate = selectedDateKey ? fromKey(selectedDateKey) : selectedDate;
+                const direction = dateObj > currentDate ? 1 : dateObj < currentDate ? -1 : 0;
+                selectDate(dateObj, { direction });
             });
         }
 
@@ -448,8 +552,28 @@ function renderMobileDateNavigator(selectedDate) {
     prevButton.disabled = selectedDate <= today;
 
     requestAnimationFrame(() => {
-        centerSelectedMobileDate(false);
+        updateMobileDateSizing();
+        centerSelectedMobileDate(smooth);
     });
+}
+
+function updateMobileDateSizing() {
+    const strip = document.getElementById("mobileDateStrip");
+    if (!strip || !strip.clientWidth) return;
+
+    const styles = window.getComputedStyle(strip);
+    const gap = parseFloat(styles.columnGap || styles.gap) || 6;
+    const availableWidth = strip.clientWidth;
+    const minimumChipWidth = 44;
+
+    // On privilégie 5 cases complètes. Si l'espace est trop serré, on passe à 3.
+    // Le résultat reste toujours un nombre impair pour garder la date sélectionnée centrée.
+    const fiveChipWidth = (availableWidth - (gap * 4)) / 5;
+    const visibleCount = fiveChipWidth >= minimumChipWidth ? 5 : 3;
+    const chipWidth = (availableWidth - (gap * (visibleCount - 1))) / visibleCount;
+
+    strip.style.setProperty("--mobile-chip-width", `${chipWidth}px`);
+    strip.dataset.visibleDays = String(visibleCount);
 }
 
 function centerSelectedMobileDate(smooth = true) {
@@ -461,7 +585,7 @@ function centerSelectedMobileDate(smooth = true) {
     const targetLeft = selected.offsetLeft - ((strip.clientWidth - selected.offsetWidth) / 2);
     strip.scrollTo({
         left: Math.max(0, targetLeft),
-        behavior: smooth ? "smooth" : "auto"
+        behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto"
     });
 }
 
@@ -476,12 +600,19 @@ function navigateSelectedDay(direction) {
     );
 
     if (target < getToday()) return;
-    selectDate(target);
+    selectDate(target, { direction });
 }
 
 // --- 6. OUVERTURE / FERMETURE MOBILE ---
 
 function openMobileTimeline(pane) {
+    if (timelineCloseTimer) {
+        window.clearTimeout(timelineCloseTimer);
+        timelineCloseTimer = null;
+    }
+
+    pane.classList.remove("is-closing");
+
     if (!pane.classList.contains("show")) {
         mobileCalendarScrollY = window.scrollY;
         document.body.style.top = `-${mobileCalendarScrollY}px`;
@@ -490,17 +621,31 @@ function openMobileTimeline(pane) {
     }
 }
 
-function closeMobileTimeline({ restoreScroll = true } = {}) {
+function closeMobileTimeline({ restoreScroll = true, immediate = false } = {}) {
     const pane = document.getElementById("timeline-pane");
     const wasOpen = pane.classList.contains("show") || document.body.classList.contains("timeline-open");
 
-    pane.classList.remove("show");
-    document.body.classList.remove("timeline-open");
-    document.body.style.top = "";
+    if (!wasOpen) return;
 
-    if (wasOpen && restoreScroll) {
-        window.scrollTo(0, mobileCalendarScrollY);
+    const finalizeClose = () => {
+        pane.classList.remove("show", "is-closing");
+        document.body.classList.remove("timeline-open");
+        document.body.style.top = "";
+
+        if (restoreScroll) {
+            window.scrollTo(0, mobileCalendarScrollY);
+        }
+
+        timelineCloseTimer = null;
+    };
+
+    if (immediate || prefersReducedMotion()) {
+        finalizeClose();
+        return;
     }
+
+    pane.classList.add("is-closing");
+    timelineCloseTimer = window.setTimeout(finalizeClose, 190);
 }
 
 // --- 7. NAVIGATION ET RESPONSIVE ---
@@ -511,7 +656,7 @@ document.getElementById("prevMonthBtn").addEventListener("click", () => {
         currentBaseDate.getMonth() - 1,
         1
     );
-    renderCalendar();
+    renderCalendar({ animate: true });
 });
 
 document.getElementById("nextMonthBtn").addEventListener("click", () => {
@@ -520,7 +665,7 @@ document.getElementById("nextMonthBtn").addEventListener("click", () => {
         currentBaseDate.getMonth() + 1,
         1
     );
-    renderCalendar();
+    renderCalendar({ animate: true });
 });
 
 document.getElementById("mobilePrevDayBtn").addEventListener("click", () => {
@@ -545,11 +690,28 @@ window.addEventListener("resize", () => {
 
         if (mobileNow !== wasMobileLayout) {
             if (!mobileNow) {
-                closeMobileTimeline({ restoreScroll: false });
+                closeMobileTimeline({ restoreScroll: false, immediate: true });
+
+                if (!selectedDateKey) {
+                    const today = getToday();
+                    selectedDateKey = toKey(today);
+                    currentBaseDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                }
+
+                renderCalendar();
+                renderTimeline(selectedDateKey, fromKey(selectedDateKey), { animate: false });
+            } else {
+                closeMobileTimeline({ restoreScroll: false, immediate: true });
+                renderCalendar();
             }
 
-            renderCalendar();
             wasMobileLayout = mobileNow;
+            return;
+        }
+
+        if (mobileNow) {
+            updateMobileDateSizing();
+            centerSelectedMobileDate(false);
         }
     });
 });
