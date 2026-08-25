@@ -144,6 +144,21 @@
             min-height: 0;
         }
 
+        #calendarGrid.calendar-refresh {
+            animation: calendar-refresh 220ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes calendar-refresh {
+            from {
+                opacity: 0.72;
+                transform: translateY(5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .month-section {
             min-height: 0;
             display: flex;
@@ -193,7 +208,11 @@
             font-family: "Inter", sans-serif;
             font-size: 0.95rem;
             font-weight: 500;
-            transition: box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease;
+            transition:
+                box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                color 220ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .day-empty {
@@ -250,6 +269,12 @@
             position: relative;
             border-left: 1px solid #ebf0f2;
             background: #f8f9fa;
+        }
+
+        .timeline-header,
+        #mobileDateNavigator,
+        .timeline-track {
+            will-change: transform, opacity;
         }
 
         #timeline-close {
@@ -542,6 +567,33 @@
 
             #timeline-pane.show {
                 display: flex;
+                animation: mobile-panel-enter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            #timeline-pane.show.is-closing {
+                animation: mobile-panel-exit 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+            }
+
+            @keyframes mobile-panel-enter {
+                from {
+                    opacity: 0;
+                    transform: translateY(14px) scale(0.995);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+
+            @keyframes mobile-panel-exit {
+                from {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateY(8px) scale(0.997);
+                }
             }
 
             #timeline-close {
@@ -594,10 +646,26 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
+                position: relative;
+                z-index: 3;
                 background: #f1f4f5;
                 color: #2b3437;
                 cursor: pointer;
-                transition: opacity 160ms ease, background-color 160ms ease;
+                box-shadow: 0 1px 2px rgba(43, 52, 55, 0.04);
+                transition:
+                    opacity 180ms ease,
+                    background-color 180ms ease,
+                    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+                    box-shadow 180ms ease;
+            }
+
+            .mobile-day-nav-button:not(:disabled):hover {
+                background: #ebf0f2;
+                box-shadow: 0 3px 8px rgba(43, 52, 55, 0.08);
+            }
+
+            .mobile-day-nav-button:not(:disabled):active {
+                transform: scale(0.95);
             }
 
             .mobile-day-nav-button:disabled {
@@ -606,15 +674,34 @@
             }
 
             .mobile-date-strip {
+                --mobile-date-gap: 6px;
+                --mobile-chip-width: 50px;
                 min-width: 0;
                 flex: 1 1 auto;
                 display: flex;
-                gap: 6px;
+                gap: var(--mobile-date-gap);
                 overflow-x: auto;
+                overflow-y: hidden;
                 overscroll-behavior-x: contain;
-                scroll-snap-type: x proximity;
+                scroll-snap-type: x mandatory;
+                scroll-behavior: smooth;
+                scroll-padding-inline: 10px;
                 scrollbar-width: none;
                 -webkit-overflow-scrolling: touch;
+                -webkit-mask-image: linear-gradient(
+                    to right,
+                    transparent 0,
+                    #000 12px,
+                    #000 calc(100% - 12px),
+                    transparent 100%
+                );
+                mask-image: linear-gradient(
+                    to right,
+                    transparent 0,
+                    #000 12px,
+                    #000 calc(100% - 12px),
+                    transparent 100%
+                );
             }
 
             .mobile-date-strip::-webkit-scrollbar {
@@ -622,9 +709,10 @@
             }
 
             .mobile-date-chip {
-                width: 50px;
+                width: var(--mobile-chip-width);
                 height: 54px;
-                flex: 0 0 50px;
+                flex: 0 0 var(--mobile-chip-width);
+                min-width: 0;
                 border: 0;
                 border-radius: 10px;
                 display: flex;
@@ -633,9 +721,19 @@
                 justify-content: center;
                 gap: 2px;
                 scroll-snap-align: center;
+                scroll-snap-stop: always;
                 font-family: "Inter", sans-serif;
                 cursor: pointer;
-                transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+                box-shadow: 0 1px 2px rgba(43, 52, 55, 0.025);
+                transition:
+                    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                    color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .mobile-date-chip:not(:disabled):active {
+                transform: scale(0.96);
             }
 
             .mobile-date-chip .mobile-date-weekday {
@@ -673,7 +771,7 @@
             .mobile-date-chip.selected {
                 background: #4c5355;
                 color: #ffffff;
-                box-shadow: 0 0 0 3px #e8eef0;
+                box-shadow: 0 0 0 3px #e8eef0, 0 5px 12px rgba(43, 52, 55, 0.14);
                 transform: translateY(-1px);
             }
 
@@ -753,8 +851,18 @@
             }
 
             .mobile-date-chip {
-                width: 46px;
-                flex-basis: 46px;
+                height: 50px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
             }
         }
 
