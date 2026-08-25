@@ -1,265 +1,557 @@
 // public/embed-v2.js
 
 const API_URL = "/api/v2/availability";
+
 let dataByDate = {}; // Format: { "YYYY-MM-DD": { blockedSlots: [], isFullDayBlocked: false } }
 let currentBaseDate = new Date();
 currentBaseDate.setDate(1);
+currentBaseDate.setHours(0, 0, 0, 0);
 
 let selectedDateKey = null;
+let mobileCalendarScrollY = 0;
+let wasMobileLayout = window.matchMedia("(max-width: 767px)").matches;
+let resizeFrame = null;
 
-const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const MONTHS_FR = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+];
+
 const WEEKDAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+const WEEKDAYS_FR_MOBILE = ["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"];
 
 // --- 1. FONCTIONS DE TEMPS ET DE CALCUL ---
 
-function pad(n) { return n.toString().padStart(2, "0"); }
+function pad(n) {
+    return n.toString().padStart(2, "0");
+}
 
 function toKey(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+function fromKey(dateKey) {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function getToday() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+function isMobileLayout() {
+    return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function formatHours(hours) {
+    return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
 // Convertit un index (0 à 23) en heure "HH:mm" (de 08:00 à 19:30)
 function indexToTime(index) {
     const hour = Math.floor(index / 2) + 8;
-    const min = (index % 2 === 0) ? "00" : "30";
+    const min = index % 2 === 0 ? "00" : "30";
     return `${pad(hour)}:${min}`;
 }
 
-// Le coeur du système : calcule les blocs disponibles pour une journée spécifique
+// Calcule les blocs disponibles pour une journée spécifique.
 function calculateDailySlots(dateKey) {
-    const isWeekend = new Date(dateKey + "T00:00:00").getDay() === 0 || new Date(dateKey + "T00:00:00").getDay() === 6;
+    const dayDate = fromKey(dateKey);
+    const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
     const minSlotsRequired = isWeekend ? 8 : 4; // 8 slots = 4h, 4 slots = 2h
 
-    let slots = new Array(24).fill('available');
+    const slots = new Array(24).fill("available");
     const dayData = dataByDate[dateKey] || { blockedSlots: [], isFullDayBlocked: false };
 
     if (dayData.isFullDayBlocked) {
-        return new Array(24).fill('unavailable');
+        return new Array(24).fill("unavailable");
     }
 
-    // 1. Placer les blocages de l'admin
-    const blockedSet = new Set(dayData.blockedSlots);
+    // 1. Placer les blocages de l'admin.
+    const blockedSet = new Set(dayData.blockedSlots || []);
     for (let i = 0; i < 24; i++) {
         if (blockedSet.has(indexToTime(i))) {
-            slots[i] = 'booked';
+            slots[i] = "booked";
         }
     }
 
-    // 2. Appliquer le tampon de ménage (2 slots = 1h) APRÈS chaque réservation
+    // 2. Appliquer le tampon de ménage de 1h après chaque réservation.
     for (let i = 0; i < 23; i++) {
-        // Si le slot actuel est booké, et que le prochain ne l'est pas, c'est la fin d'une réservation
-        if (slots[i] === 'booked' && slots[i+1] !== 'booked') {
-            if (i + 1 < 24) slots[i + 1] = 'cleaning';
-            if (i + 2 < 24 && slots[i + 2] !== 'booked') slots[i + 2] = 'cleaning';
+        if (slots[i] === "booked" && slots[i + 1] !== "booked") {
+            if (i + 1 < 24) slots[i + 1] = "cleaning";
+            if (i + 2 < 24 && slots[i + 2] !== "booked") slots[i + 2] = "cleaning";
         }
     }
 
-    // 3. Appliquer la contrainte de durée minimale (2h semaine, 4h weekend)
+    // 3. Appliquer la contrainte de durée minimale.
     let currentFreeChunk = [];
     for (let i = 0; i <= 24; i++) {
-        if (i < 24 && slots[i] === 'available') {
+        if (i < 24 && slots[i] === "available") {
             currentFreeChunk.push(i);
         } else {
             if (currentFreeChunk.length > 0 && currentFreeChunk.length < minSlotsRequired) {
-                // Trop court, on le bloque
-                currentFreeChunk.forEach(idx => slots[idx] = 'system_blocked');
+                currentFreeChunk.forEach((idx) => {
+                    slots[idx] = "system_blocked";
+                });
             }
             currentFreeChunk = [];
         }
     }
 
-    // Uniformiser les statuts bloqués pour l'UI (booked, cleaning, system_blocked -> unavailable)
-    return slots.map(s => s === 'available' ? 'available' : 'unavailable');
+    // Uniformiser les statuts bloqués pour l'UI.
+    return slots.map((status) => status === "available" ? "available" : "unavailable");
 }
 
-// --- 2. GESTION DE L'INTERFACE (UI) ---
+function hasAvailability(dateKey) {
+    return calculateDailySlots(dateKey).includes("available");
+}
+
+// --- 2. CHARGEMENT DES DONNÉES ---
 
 async function loadAvailability() {
     try {
         const res = await fetch(API_URL);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+
         const items = await res.json();
         dataByDate = {};
+
         for (const item of items) {
             dataByDate[item.date] = item;
         }
+
         renderCalendar();
     } catch (err) {
         console.error("Erreur de chargement", err);
     }
 }
 
+// --- 3. CALENDRIER ---
+
 function renderCalendar() {
-    const grid = document.getElementById("calendarGrid");
+    const root = document.getElementById("calendarGrid");
     const monthLabel = document.getElementById("currentMonthLabel");
-    
-    const year = currentBaseDate.getFullYear();
-    const monthIndex = currentBaseDate.getMonth();
-    
-    monthLabel.textContent = `${MONTHS_FR[monthIndex]} ${year}`;
-    grid.innerHTML = "";
 
-    // En-têtes des jours
-    WEEKDAYS_FR.forEach(label => {
-        const div = document.createElement("div");
-        div.className = "text-center font-label text-[0.75rem] uppercase font-bold text-outline-variant pb-2";
-        div.textContent = label;
-        grid.appendChild(div);
-    });
+    const baseMonth = new Date(
+        currentBaseDate.getFullYear(),
+        currentBaseDate.getMonth(),
+        1
+    );
 
-    const firstDay = new Date(year, monthIndex, 1).getDay();
-    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    monthLabel.textContent = `${MONTHS_FR[baseMonth.getMonth()]} ${baseMonth.getFullYear()}`;
+    root.innerHTML = "";
 
-    // Padding début du mois
-    for (let i = 0; i < firstDay; i++) {
-        const empty = document.createElement("div");
-        empty.className = "aspect-square md:aspect-video lg:aspect-square bg-surface-dim opacity-30 rounded-xl";
-        grid.appendChild(empty);
+    // Mobile: deux mois consécutifs verticalement.
+    if (isMobileLayout()) {
+        root.appendChild(buildMonthSection(baseMonth, false));
+
+        const nextMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 1);
+        root.appendChild(buildMonthSection(nextMonth, true));
+        return;
     }
 
-    const todayDate = new Date();
-    todayDate.setHours(0,0,0,0);
+    // Tablette et desktop: un mois, avec la timeline visible à droite.
+    root.appendChild(buildMonthSection(baseMonth, false));
+}
 
-    for (let d = 1; d <= lastDay; d++) {
-        const dateObj = new Date(year, monthIndex, d);
-        const key = toKey(dateObj);
-        
-        const btn = document.createElement("button");
-        btn.textContent = d;
+function buildMonthSection(monthDate, showTitle) {
+    const year = monthDate.getFullYear();
+    const monthIndex = monthDate.getMonth();
 
-        // Si date passée
-        if (dateObj < todayDate) {
-            btn.className = "aspect-square md:aspect-video lg:aspect-square bg-surface-dim text-on-surface-variant opacity-50 cursor-not-allowed flex items-center justify-center font-body font-medium rounded-xl";
-            btn.disabled = true;
+    const section = document.createElement("section");
+    section.className = "month-section";
+
+    if (showTitle) {
+        const title = document.createElement("h2");
+        title.className = "month-title-secondary";
+        title.textContent = `${MONTHS_FR[monthIndex]} ${year}`;
+        section.appendChild(title);
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "month-grid";
+
+    WEEKDAYS_FR.forEach((label) => {
+        const weekday = document.createElement("div");
+        weekday.className = "weekday-cell";
+        weekday.textContent = label;
+        grid.appendChild(weekday);
+    });
+
+    const firstDayIndex = new Date(year, monthIndex, 1).getDay();
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const today = getToday();
+
+    let renderedDayCells = 0;
+
+    for (let i = 0; i < firstDayIndex; i++) {
+        grid.appendChild(createEmptyDayCell());
+        renderedDayCells++;
+    }
+
+    for (let day = 1; day <= lastDay; day++) {
+        const dateObj = new Date(year, monthIndex, day);
+        const dateKey = toKey(dateObj);
+        const button = document.createElement("button");
+
+        button.type = "button";
+        button.className = "day-cell";
+        button.textContent = String(day);
+        button.setAttribute(
+            "aria-label",
+            `${day} ${MONTHS_FR[monthIndex]} ${year}`
+        );
+
+        if (dateObj < today) {
+            button.classList.add("day-past");
+            button.disabled = true;
         } else {
-            // Calculer si la journée a des dispos
-            const slots = calculateDailySlots(key);
-            const hasAvailable = slots.includes('available');
+            button.classList.add(hasAvailability(dateKey) ? "day-available" : "day-unavailable");
 
-            if (hasAvailable) {
-                btn.className = "aspect-square md:aspect-video lg:aspect-square bg-secondary-container text-secondary flex items-center justify-center font-body font-medium hover:ring-2 ring-secondary ring-offset-2 transition-all rounded-xl cursor-pointer";
-            } else {
-                btn.className = "aspect-square md:aspect-video lg:aspect-square bg-error-container text-error flex items-center justify-center font-body font-medium hover:ring-2 ring-error ring-offset-2 transition-all rounded-xl cursor-pointer";
+            if (dateKey === selectedDateKey) {
+                button.classList.add("day-selected");
+                button.setAttribute("aria-current", "date");
             }
 
-            // État sélectionné
-            if (key === selectedDateKey) {
-                btn.className = "aspect-square md:aspect-video lg:aspect-square bg-primary text-on-primary flex items-center justify-center font-body font-bold ring-4 ring-primary-container ring-offset-0 scale-105 shadow-md rounded-xl";
-            }
-
-            btn.onclick = () => {
-                selectedDateKey = key;
-                renderCalendar(); // Re-render pour afficher l'état sélectionné
-                renderTimeline(key, dateObj);
-            };
+            button.addEventListener("click", () => {
+                selectDate(dateObj);
+            });
         }
-        grid.appendChild(btn);
+
+        grid.appendChild(button);
+        renderedDayCells++;
+    }
+
+    // Toujours compléter 6 semaines pour garder une géométrie stable sur desktop/tablette.
+    while (renderedDayCells < 42) {
+        grid.appendChild(createEmptyDayCell());
+        renderedDayCells++;
+    }
+
+    section.appendChild(grid);
+    return section;
+}
+
+function createEmptyDayCell() {
+    const empty = document.createElement("div");
+    empty.className = "day-cell day-empty";
+    empty.setAttribute("aria-hidden", "true");
+    return empty;
+}
+
+function selectDate(dateObj) {
+    const normalizedDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    selectedDateKey = toKey(normalizedDate);
+
+    keepSelectedDateInsideMobileCalendarWindow(normalizedDate);
+    renderCalendar();
+    renderTimeline(selectedDateKey, normalizedDate);
+}
+
+function keepSelectedDateInsideMobileCalendarWindow(dateObj) {
+    if (!isMobileLayout()) return;
+
+    const baseStart = new Date(currentBaseDate.getFullYear(), currentBaseDate.getMonth(), 1);
+    const windowEnd = new Date(currentBaseDate.getFullYear(), currentBaseDate.getMonth() + 2, 0);
+
+    if (dateObj < baseStart) {
+        currentBaseDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+        return;
+    }
+
+    if (dateObj > windowEnd) {
+        currentBaseDate = new Date(dateObj.getFullYear(), dateObj.getMonth() - 1, 1);
     }
 }
 
+// --- 4. TIMELINE ---
+
 function renderTimeline(dateKey, dateObj) {
-    const pane = document.getElementById('timeline-pane');
-    const timelineGrid = document.getElementById('timelineGrid');
-    const dateLabel = document.getElementById('timelineDateLabel');
-    const totalFreeLabel = document.getElementById('timelineTotalFree');
+    const pane = document.getElementById("timeline-pane");
+    const timelineGrid = document.getElementById("timelineGrid");
+    const dateLabel = document.getElementById("timelineDateLabel");
+    const totalFreeLabel = document.getElementById("timelineTotalFree");
 
     dateLabel.textContent = `${dateObj.getDate()} ${MONTHS_FR[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
     timelineGrid.innerHTML = "";
 
     const slots = calculateDailySlots(dateKey);
-    let totalFreeSlots = 0;
-    
-    // Regrouper les slots consécutifs du même statut pour l'affichage
-    let chunks = [];
+
+    // Correction du décompte: l'ancienne boucle omettait le premier slot 08:00-08:30,
+    // ce qui affichait 11.5h pour une journée réellement libre pendant 12h.
+    const totalFreeSlots = slots.filter((status) => status === "available").length;
+    totalFreeLabel.textContent = `${formatHours(totalFreeSlots * 0.5)} hours available`;
+
+    const chunks = buildTimelineChunks(slots);
+
+    chunks.forEach((chunk) => {
+        timelineGrid.appendChild(createTimelineChunk(chunk));
+    });
+
+    renderMobileDateNavigator(dateObj);
+
+    if (isMobileLayout()) {
+        openMobileTimeline(pane);
+    }
+}
+
+function buildTimelineChunks(slots) {
+    const chunks = [];
     let currentStatus = slots[0];
     let startIdx = 0;
 
-    for (let i = 1; i <= 24; i++) {
-        if (i === 24 || slots[i] !== currentStatus) {
+    for (let i = 1; i <= slots.length; i++) {
+        if (i === slots.length || slots[i] !== currentStatus) {
             chunks.push({
                 status: currentStatus,
-                startIdx: startIdx,
+                startIdx,
                 endIdx: i,
                 durationSlots: i - startIdx
             });
-            if (i < 24) {
+
+            if (i < slots.length) {
                 currentStatus = slots[i];
                 startIdx = i;
             }
         }
-        if (i < 24 && slots[i] === 'available') {
-            totalFreeSlots++;
-        }
     }
 
-    totalFreeLabel.textContent = `${totalFreeSlots * 0.5} hours available`;
+    return chunks;
+}
 
-    // Dessiner les blocs dans la timeline
-    chunks.forEach(chunk => {
-        const startTime = indexToTime(chunk.startIdx);
-        const hoursDuration = chunk.durationSlots * 0.5;
-        // Hauteur dynamique basée sur la durée (ex: 1 slot = 45px)
-        const minHeight = chunk.durationSlots * 45; 
+function createTimelineChunk(chunk) {
+    const startTime = indexToTime(chunk.startIdx);
+    const hoursDuration = chunk.durationSlots * 0.5;
 
-        const blockDiv = document.createElement('div');
-        blockDiv.className = `group flex gap-4 min-h-[${minHeight}px]`;
+    const block = document.createElement("div");
+    block.className = "timeline-chunk";
+    block.dataset.slots = String(chunk.durationSlots);
 
-        let contentHTML = "";
-        if (chunk.status === 'available') {
-            contentHTML = `
-                <div class="h-full w-full bg-surface p-4 flex flex-col justify-center border border-outline-variant border-opacity-30 shadow-sm rounded-xl mb-4">
-                    <div class="flex items-center gap-2 mb-1">
-                        <div class="w-2 h-2 rounded-full bg-secondary"></div>
-                        <span class="text-xs font-label uppercase font-bold text-secondary">Available</span>
-                    </div>
-                    <span class="text-[11px] font-body text-on-surface-variant">${hoursDuration} Hours Free</span>
-                </div>
-            `;
+    // Chaque tranche prend une portion exacte de la hauteur disponible.
+    // Les 24 demi-heures remplissent donc toujours 08:00 à 20:00 sans scroll.
+    block.style.flex = `${chunk.durationSlots} 1 0`;
+
+    const axis = document.createElement("div");
+    axis.className = "timeline-axis";
+
+    const time = document.createElement("span");
+    time.className = "timeline-time";
+    time.textContent = startTime;
+
+    const line = document.createElement("div");
+    line.className = "timeline-line";
+
+    axis.appendChild(time);
+    axis.appendChild(line);
+
+    const content = document.createElement("div");
+    content.className = "timeline-content";
+
+    const card = document.createElement("div");
+    card.className = `timeline-card ${chunk.status}`;
+
+    if (chunk.status === "available") {
+        const statusRow = document.createElement("div");
+        statusRow.className = "timeline-status-row";
+
+        const dot = document.createElement("span");
+        dot.className = "timeline-status-dot";
+
+        const label = document.createElement("span");
+        label.className = "timeline-card-label";
+        label.textContent = "Available";
+
+        const detail = document.createElement("span");
+        detail.className = "timeline-card-detail";
+        detail.textContent = `${formatHours(hoursDuration)} Hours Free`;
+
+        statusRow.appendChild(dot);
+        statusRow.appendChild(label);
+        card.appendChild(statusRow);
+        card.appendChild(detail);
+    } else {
+        const label = document.createElement("span");
+        label.className = "timeline-card-label";
+        label.textContent = "Unavailable";
+        card.appendChild(label);
+    }
+
+    content.appendChild(card);
+    block.appendChild(axis);
+    block.appendChild(content);
+
+    return block;
+}
+
+// --- 5. CARROUSEL DE DATES MOBILE ---
+
+function renderMobileDateNavigator(selectedDate) {
+    const strip = document.getElementById("mobileDateStrip");
+    const prevButton = document.getElementById("mobilePrevDayBtn");
+    const today = getToday();
+
+    strip.innerHTML = "";
+
+    // 29 dates donnent assez de contenu pour un vrai swipe horizontal,
+    // tout en recentrant la date sélectionnée après chaque sélection.
+    for (let offset = -14; offset <= 14; offset++) {
+        const dateObj = new Date(
+            selectedDate.getFullYear(),
+            selectedDate.getMonth(),
+            selectedDate.getDate() + offset
+        );
+
+        const dateKey = toKey(dateObj);
+        const button = document.createElement("button");
+        const weekday = document.createElement("span");
+        const number = document.createElement("span");
+
+        button.type = "button";
+        button.className = "mobile-date-chip";
+        button.dataset.dateKey = dateKey;
+        button.setAttribute(
+            "aria-label",
+            `${dateObj.getDate()} ${MONTHS_FR[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+        );
+
+        weekday.className = "mobile-date-weekday";
+        weekday.textContent = WEEKDAYS_FR_MOBILE[dateObj.getDay()];
+
+        number.className = "mobile-date-number";
+        number.textContent = String(dateObj.getDate());
+
+        button.appendChild(weekday);
+        button.appendChild(number);
+
+        if (dateObj < today) {
+            button.classList.add("past");
+            button.disabled = true;
         } else {
-            contentHTML = `
-                <div class="h-full w-full bg-surface-variant p-4 flex flex-col justify-center rounded-xl mb-4">
-                    <span class="text-xs font-label uppercase font-bold text-on-surface-variant">Unavailable</span>
-                </div>
-            `;
+            button.classList.add(hasAvailability(dateKey) ? "available" : "unavailable");
+            button.addEventListener("click", () => {
+                selectDate(dateObj);
+            });
         }
 
-        blockDiv.innerHTML = `
-            <div class="flex flex-col items-center">
-                <span class="text-xs font-label text-outline whitespace-nowrap">${startTime}</span>
-                <div class="w-[1px] flex-1 bg-surface-container-high"></div>
-            </div>
-            <div class="flex-1 pb-0">
-                ${contentHTML}
-            </div>
-        `;
-        timelineGrid.appendChild(blockDiv);
+        if (dateKey === selectedDateKey) {
+            button.classList.add("selected");
+            button.setAttribute("aria-current", "date");
+        }
+
+        strip.appendChild(button);
+    }
+
+    prevButton.disabled = selectedDate <= today;
+
+    requestAnimationFrame(() => {
+        centerSelectedMobileDate(false);
     });
+}
 
-    // Ajouter le marqueur de fin (20:00)
-    const endMarker = document.createElement('div');
-    endMarker.className = "group flex gap-4 h-[20px]";
-    endMarker.innerHTML = `
-        <div class="flex flex-col items-center">
-            <span class="text-xs font-label text-outline whitespace-nowrap">20:00</span>
-        </div>
-        <div class="flex-1"></div>
-    `;
-    timelineGrid.appendChild(endMarker);
+function centerSelectedMobileDate(smooth = true) {
+    const strip = document.getElementById("mobileDateStrip");
+    const selected = strip.querySelector(".mobile-date-chip.selected");
 
-    // Ouvrir le panneau sur mobile
-    if (window.innerWidth < 768) {
-        pane.classList.add('show');
+    if (!selected) return;
+
+    const targetLeft = selected.offsetLeft - ((strip.clientWidth - selected.offsetWidth) / 2);
+    strip.scrollTo({
+        left: Math.max(0, targetLeft),
+        behavior: smooth ? "smooth" : "auto"
+    });
+}
+
+function navigateSelectedDay(direction) {
+    if (!selectedDateKey) return;
+
+    const current = fromKey(selectedDateKey);
+    const target = new Date(
+        current.getFullYear(),
+        current.getMonth(),
+        current.getDate() + direction
+    );
+
+    if (target < getToday()) return;
+    selectDate(target);
+}
+
+// --- 6. OUVERTURE / FERMETURE MOBILE ---
+
+function openMobileTimeline(pane) {
+    if (!pane.classList.contains("show")) {
+        mobileCalendarScrollY = window.scrollY;
+        document.body.style.top = `-${mobileCalendarScrollY}px`;
+        document.body.classList.add("timeline-open");
+        pane.classList.add("show");
     }
 }
 
-// Initialisation des boutons de navigation
-document.getElementById('prevMonthBtn').addEventListener('click', () => {
-    currentBaseDate.setMonth(currentBaseDate.getMonth() - 1);
+function closeMobileTimeline({ restoreScroll = true } = {}) {
+    const pane = document.getElementById("timeline-pane");
+    const wasOpen = pane.classList.contains("show") || document.body.classList.contains("timeline-open");
+
+    pane.classList.remove("show");
+    document.body.classList.remove("timeline-open");
+    document.body.style.top = "";
+
+    if (wasOpen && restoreScroll) {
+        window.scrollTo(0, mobileCalendarScrollY);
+    }
+}
+
+// --- 7. NAVIGATION ET RESPONSIVE ---
+
+document.getElementById("prevMonthBtn").addEventListener("click", () => {
+    currentBaseDate = new Date(
+        currentBaseDate.getFullYear(),
+        currentBaseDate.getMonth() - 1,
+        1
+    );
     renderCalendar();
 });
 
-document.getElementById('nextMonthBtn').addEventListener('click', () => {
-    currentBaseDate.setMonth(currentBaseDate.getMonth() + 1);
+document.getElementById("nextMonthBtn").addEventListener("click", () => {
+    currentBaseDate = new Date(
+        currentBaseDate.getFullYear(),
+        currentBaseDate.getMonth() + 1,
+        1
+    );
     renderCalendar();
+});
+
+document.getElementById("mobilePrevDayBtn").addEventListener("click", () => {
+    navigateSelectedDay(-1);
+});
+
+document.getElementById("mobileNextDayBtn").addEventListener("click", () => {
+    navigateSelectedDay(1);
+});
+
+document.getElementById("timeline-close").addEventListener("click", () => {
+    closeMobileTimeline();
+});
+
+window.addEventListener("resize", () => {
+    if (resizeFrame) {
+        cancelAnimationFrame(resizeFrame);
+    }
+
+    resizeFrame = requestAnimationFrame(() => {
+        const mobileNow = isMobileLayout();
+
+        if (mobileNow !== wasMobileLayout) {
+            if (!mobileNow) {
+                closeMobileTimeline({ restoreScroll: false });
+            }
+
+            renderCalendar();
+            wasMobileLayout = mobileNow;
+        }
+    });
 });
 
 document.addEventListener("DOMContentLoaded", () => {
