@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html class="light" lang="fr">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    
+
     <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -32,7 +32,7 @@
                         "surface-dim": "#e9edef",
                         "outline-variant": "#d1d9dd",
                         "on-surface-variant": "#6c787c",
-                        "surface": "#ffffff",
+                        "surface": "#ffffff"
                     },
                     fontFamily: {
                         "headline": ["Manrope"],
@@ -43,44 +43,781 @@
             }
         }
     </script>
+
     <style>
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        body { font-family: 'Inter', sans-serif; background-color: #fdfdfd; }
-        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #d1dce0 transparent; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1dce0; border-radius: 16px; }
-        .ambient-shadow { box-shadow: 0px 24px 48px rgba(43, 52, 55, 0.05); }
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            min-height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Inter", sans-serif;
+            background-color: #fdfdfd;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+
+        .ambient-shadow {
+            box-shadow: 0 24px 48px rgba(43, 52, 55, 0.05);
+        }
+
+        #availability-shell {
+            width: 100%;
+            max-width: 1120px;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid #ebf0f2;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .calendar-pane {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            background: #ffffff;
+        }
+
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex: 0 0 auto;
+        }
+
+        .month-navigation {
+            display: flex;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        .nav-button {
+            width: 40px;
+            height: 40px;
+            border: 0;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f4f5;
+            color: #2b3437;
+            cursor: pointer;
+            transition: background-color 160ms ease, transform 160ms ease;
+        }
+
+        .nav-button:hover {
+            background: #ebf0f2;
+        }
+
+        .nav-button:active {
+            transform: scale(0.96);
+        }
+
+        .availability-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            flex: 0 0 auto;
+        }
+
+        #calendarGrid {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .month-section {
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .month-title-secondary {
+            margin: 0 0 14px;
+            font-family: "Manrope", sans-serif;
+            font-size: 1.25rem;
+            line-height: 1.25;
+            font-weight: 700;
+            color: #2b3437;
+        }
+
+        .month-grid {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            grid-template-rows: auto repeat(6, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .weekday-cell {
+            padding: 0 0 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Inter", sans-serif;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #d1d9dd;
+        }
+
+        .day-cell {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            border: 0;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Inter", sans-serif;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease;
+        }
+
+        .day-empty {
+            background: rgba(233, 237, 239, 0.55);
+            pointer-events: none;
+        }
+
+        .day-past {
+            background: #e9edef;
+            color: #6c787c;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .day-available {
+            background: #dcf9e8;
+            color: #21a166;
+            cursor: pointer;
+        }
+
+        .day-available:hover {
+            box-shadow: inset 0 0 0 2px #21a166;
+        }
+
+        .day-unavailable {
+            background: #ffe8e8;
+            color: #d34141;
+            cursor: pointer;
+        }
+
+        .day-unavailable:hover {
+            box-shadow: inset 0 0 0 2px #d34141;
+        }
+
+        .day-selected,
+        .day-selected:hover {
+            position: relative;
+            z-index: 1;
+            background: #4c5355;
+            color: #ffffff;
+            font-weight: 700;
+            box-shadow: 0 0 0 4px #e8eef0, 0 4px 10px rgba(43, 52, 55, 0.14);
+            transform: scale(1.02);
+        }
+
+        #timeline-pane {
+            width: 400px;
+            flex: 0 0 400px;
+            min-width: 0;
+            min-height: 0;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            border-left: 1px solid #ebf0f2;
+            background: #f8f9fa;
+        }
+
+        #timeline-close {
+            display: none;
+        }
+
+        .timeline-header {
+            flex: 0 0 auto;
+            margin-bottom: 18px;
+        }
+
+        #mobileDateNavigator {
+            display: none;
+        }
+
+        .timeline-track {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #timelineGrid {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .timeline-chunk {
+            min-height: 0;
+            display: flex;
+            gap: 14px;
+            overflow: hidden;
+        }
+
+        .timeline-axis {
+            width: 42px;
+            flex: 0 0 42px;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .timeline-time {
+            flex: 0 0 auto;
+            white-space: nowrap;
+            font-family: "Inter", sans-serif;
+            font-size: 0.72rem;
+            line-height: 1;
+            color: #737c7f;
+        }
+
+        .timeline-line {
+            width: 1px;
+            flex: 1 1 auto;
+            min-height: 0;
+            margin-top: 4px;
+            background: #ebf0f2;
+        }
+
+        .timeline-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            padding-bottom: 4px;
+        }
+
+        .timeline-card {
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            padding: 10px 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        .timeline-card.available {
+            border: 1px solid rgba(209, 217, 221, 0.7);
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(43, 52, 55, 0.06);
+        }
+
+        .timeline-card.unavailable {
+            background: #e2e8ea;
+        }
+
+        .timeline-status-row {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+        }
+
+        .timeline-status-dot {
+            width: 7px;
+            height: 7px;
+            flex: 0 0 7px;
+            border-radius: 999px;
+            background: #21a166;
+        }
+
+        .timeline-card-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: "Inter", sans-serif;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .timeline-card.available .timeline-card-label {
+            color: #21a166;
+        }
+
+        .timeline-card.unavailable .timeline-card-label {
+            color: #6c787c;
+        }
+
+        .timeline-card-detail {
+            margin-top: 2px;
+            font-family: "Inter", sans-serif;
+            font-size: 0.64rem;
+            color: #6c787c;
+        }
+
+        .timeline-chunk[data-slots="1"] .timeline-card,
+        .timeline-chunk[data-slots="2"] .timeline-card {
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+
+        .timeline-chunk[data-slots="1"] .timeline-card-label,
+        .timeline-chunk[data-slots="1"] .timeline-card-detail,
+        .timeline-chunk[data-slots="2"] .timeline-card-detail {
+            display: none;
+        }
+
+        .timeline-end-marker {
+            height: 18px;
+            flex: 0 0 18px;
+            display: flex;
+            gap: 14px;
+        }
+
+        .timeline-end-spacer {
+            width: 42px;
+            flex: 0 0 42px;
+            display: flex;
+            justify-content: center;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                height: 100vh;
+                height: 100dvh;
+                overflow: hidden;
+            }
+
+            #availability-shell {
+                height: min(870px, calc(100dvh - 32px));
+            }
+
+            .month-section {
+                height: 100%;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .calendar-pane {
+                padding: 20px;
+                gap: 18px;
+            }
+
+            #timeline-pane {
+                width: 320px;
+                flex-basis: 320px;
+                padding: 20px;
+            }
+
+            .month-grid {
+                gap: 5px;
+            }
+
+            .day-cell {
+                border-radius: 9px;
+                font-size: 0.86rem;
+            }
+
+            .timeline-chunk,
+            .timeline-end-marker {
+                gap: 10px;
+            }
+
+            .timeline-axis,
+            .timeline-end-spacer {
+                width: 38px;
+                flex-basis: 38px;
+            }
+        }
 
         @media (max-width: 767px) {
-            #timeline-pane { position: fixed; inset: 0; z-index: 50; display: none; margin: 0; width: 100%; height: 100%; background-color: #ffffff; padding: 1.5rem; }
-            #timeline-pane.show { display: flex; }
-            #timeline-close { display: flex; }
+            body {
+                min-height: 100vh;
+                min-height: 100dvh;
+                padding: 12px;
+                align-items: flex-start;
+                justify-content: flex-start;
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+
+            body.timeline-open {
+                position: fixed;
+                left: 0;
+                right: 0;
+                width: 100%;
+                overflow: hidden;
+            }
+
+            #availability-shell {
+                display: block;
+                overflow: visible;
+            }
+
+            .calendar-pane {
+                width: 100%;
+                padding: 18px;
+                gap: 20px;
+            }
+
+            .calendar-header {
+                align-items: flex-start;
+            }
+
+            .availability-legend {
+                gap: 10px 14px;
+            }
+
+            #calendarGrid {
+                display: block;
+            }
+
+            .month-section + .month-section {
+                margin-top: 30px;
+                padding-top: 26px;
+                border-top: 1px solid #ebf0f2;
+            }
+
+            .month-grid {
+                display: grid;
+                grid-template-columns: repeat(7, minmax(0, 1fr));
+                grid-template-rows: none;
+                gap: 6px;
+            }
+
+            .weekday-cell {
+                padding-bottom: 4px;
+                font-size: 0.66rem;
+            }
+
+            .day-cell {
+                height: auto;
+                aspect-ratio: 1 / 1;
+                border-radius: 10px;
+                font-size: 0.86rem;
+            }
+
+            #timeline-pane {
+                position: fixed;
+                inset: 0;
+                z-index: 50;
+                width: 100%;
+                height: 100vh;
+                height: 100dvh;
+                margin: 0;
+                padding: max(18px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+                display: none;
+                border-left: 0;
+                background: #ffffff;
+                overflow: hidden;
+            }
+
+            #timeline-pane.show {
+                display: flex;
+            }
+
+            #timeline-close {
+                position: absolute;
+                top: max(12px, env(safe-area-inset-top));
+                right: 12px;
+                z-index: 2;
+                width: 42px;
+                height: 42px;
+                border: 0;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #f1f4f5;
+                color: #2b3437;
+                cursor: pointer;
+            }
+
+            .timeline-header {
+                margin-bottom: 12px;
+                padding-right: 50px;
+            }
+
+            #timelineDateLabel {
+                font-size: 1.15rem;
+                line-height: 1.25;
+            }
+
+            #timelineTotalFree {
+                margin-top: 2px;
+                font-size: 0.78rem;
+            }
+
+            #mobileDateNavigator {
+                width: 100%;
+                margin: 0 0 12px;
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                flex: 0 0 auto;
+            }
+
+            .mobile-day-nav-button {
+                width: 38px;
+                height: 46px;
+                flex: 0 0 38px;
+                border: 0;
+                border-radius: 10px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: #f1f4f5;
+                color: #2b3437;
+                cursor: pointer;
+                transition: opacity 160ms ease, background-color 160ms ease;
+            }
+
+            .mobile-day-nav-button:disabled {
+                opacity: 0.35;
+                cursor: not-allowed;
+            }
+
+            .mobile-date-strip {
+                min-width: 0;
+                flex: 1 1 auto;
+                display: flex;
+                gap: 6px;
+                overflow-x: auto;
+                overscroll-behavior-x: contain;
+                scroll-snap-type: x proximity;
+                scrollbar-width: none;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .mobile-date-strip::-webkit-scrollbar {
+                display: none;
+            }
+
+            .mobile-date-chip {
+                width: 50px;
+                height: 54px;
+                flex: 0 0 50px;
+                border: 0;
+                border-radius: 10px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 2px;
+                scroll-snap-align: center;
+                font-family: "Inter", sans-serif;
+                cursor: pointer;
+                transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+            }
+
+            .mobile-date-chip .mobile-date-weekday {
+                font-size: 0.58rem;
+                line-height: 1;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+                opacity: 0.72;
+            }
+
+            .mobile-date-chip .mobile-date-number {
+                font-size: 0.9rem;
+                line-height: 1.1;
+                font-weight: 700;
+            }
+
+            .mobile-date-chip.available {
+                background: #dcf9e8;
+                color: #21a166;
+            }
+
+            .mobile-date-chip.unavailable {
+                background: #ffe8e8;
+                color: #d34141;
+            }
+
+            .mobile-date-chip.past {
+                background: #e9edef;
+                color: #6c787c;
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
+            .mobile-date-chip.selected {
+                background: #4c5355;
+                color: #ffffff;
+                box-shadow: 0 0 0 3px #e8eef0;
+                transform: translateY(-1px);
+            }
+
+            .timeline-track {
+                flex: 1 1 auto;
+                min-height: 0;
+            }
+
+            .timeline-chunk,
+            .timeline-end-marker {
+                gap: 10px;
+            }
+
+            .timeline-axis,
+            .timeline-end-spacer {
+                width: 38px;
+                flex-basis: 38px;
+            }
+
+            .timeline-time {
+                font-size: 0.66rem;
+            }
+
+            .timeline-content {
+                padding-bottom: 3px;
+            }
+
+            .timeline-card {
+                padding: 7px 10px;
+                border-radius: 9px;
+            }
+
+            .timeline-card-label {
+                font-size: 0.62rem;
+            }
+
+            .timeline-card-detail {
+                font-size: 0.59rem;
+            }
+
+            .timeline-end-marker {
+                height: 15px;
+                flex-basis: 15px;
+            }
         }
-        @media (min-width: 768px) { #timeline-close { display: none; } }
+
+        @media (max-width: 380px) {
+            body {
+                padding: 6px;
+            }
+
+            .calendar-pane {
+                padding: 12px;
+            }
+
+            .month-grid {
+                gap: 3px;
+            }
+
+            .day-cell {
+                border-radius: 8px;
+                font-size: 0.8rem;
+            }
+
+            #timeline-pane {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            #mobileDateNavigator {
+                gap: 5px;
+            }
+
+            .mobile-day-nav-button {
+                width: 34px;
+                flex-basis: 34px;
+            }
+
+            .mobile-date-chip {
+                width: 46px;
+                flex-basis: 46px;
+            }
+        }
+
+        @media (max-height: 650px) and (max-width: 767px) {
+            #timeline-pane {
+                padding-top: 10px;
+                padding-bottom: 8px;
+            }
+
+            #timeline-close {
+                top: 8px;
+                width: 38px;
+                height: 38px;
+            }
+
+            .timeline-header {
+                margin-bottom: 7px;
+            }
+
+            #mobileDateNavigator {
+                margin-bottom: 7px;
+            }
+
+            .mobile-day-nav-button {
+                height: 42px;
+            }
+
+            .mobile-date-chip {
+                height: 46px;
+            }
+
+            .timeline-card {
+                padding-top: 4px;
+                padding-bottom: 4px;
+            }
+
+            .timeline-end-marker {
+                height: 13px;
+                flex-basis: 13px;
+            }
+        }
     </style>
 </head>
-<body class="bg-background text-on-surface flex items-center justify-center min-h-screen p-4 sm:p-8">
+<body class="bg-background text-on-surface">
 
-<div class="max-w-[1120px] w-full h-auto lg:h-[870px] bg-surface-container-low rounded-lg ambient-shadow flex flex-col md:flex-row overflow-hidden border border-surface-container-high">
-    
-    <div class="flex-1 md:w-1/2 lg:flex-1 p-8 flex flex-col gap-8 bg-surface">
-        <div class="flex items-center justify-between">
+<div id="availability-shell" class="ambient-shadow">
+    <div class="calendar-pane">
+        <div class="calendar-header">
             <div class="flex flex-col">
                 <span class="font-label text-[0.75rem] uppercase tracking-[0.05em] text-on-surface-variant font-semibold">Studio Availability</span>
                 <h1 id="currentMonthLabel" class="font-headline text-2xl font-bold text-on-surface">Mois Année</h1>
             </div>
-            <div class="flex gap-2">
-                <button id="prevMonthBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors">
-                    <span class="material-symbols-outlined text-on-surface">chevron_left</span>
+            <div class="month-navigation">
+                <button id="prevMonthBtn" class="nav-button" type="button" aria-label="Mois précédent">
+                    <span class="material-symbols-outlined">chevron_left</span>
                 </button>
-                <button id="nextMonthBtn" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors">
-                    <span class="material-symbols-outlined text-on-surface">chevron_right</span>
+                <button id="nextMonthBtn" class="nav-button" type="button" aria-label="Mois suivant">
+                    <span class="material-symbols-outlined">chevron_right</span>
                 </button>
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-4">
+        <div class="availability-legend">
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 rounded-full bg-secondary-container"></div>
                 <span class="font-label text-[0.7rem] uppercase tracking-wider text-on-surface-variant">Available</span>
@@ -91,23 +828,37 @@
             </div>
         </div>
 
-        <div id="calendarGrid" class="flex-1 grid grid-cols-7 gap-2 md:gap-y-1 lg:gap-y-3">
-            </div>
+        <div id="calendarGrid"></div>
     </div>
 
-    <div class="w-full md:w-1/2 lg:w-[400px] bg-surface-container-low p-8 flex flex-col border-l border-surface-container-high relative" id="timeline-pane">
-        <button class="absolute top-4 right-4 w-10 h-10 items-center justify-center rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-on-surface hidden" id="timeline-close" onclick="document.getElementById('timeline-pane').classList.remove('show')">
+    <div id="timeline-pane" aria-live="polite">
+        <button id="timeline-close" type="button" aria-label="Fermer la disponibilité de la journée">
             <span class="material-symbols-outlined">close</span>
         </button>
-        
-        <div class="mb-6">
+
+        <div class="timeline-header">
             <h2 id="timelineDateLabel" class="font-headline text-xl font-bold text-on-surface">Sélectionnez une date</h2>
             <p id="timelineTotalFree" class="font-body text-sm text-on-surface-variant">-- hours available</p>
         </div>
 
-        <div class="flex-1 overflow-y-auto custom-scrollbar pr-4 -mr-4 relative">
-            <div id="timelineGrid" class="flex flex-col gap-0 min-h-full">
+        <div id="mobileDateNavigator" aria-label="Navigation entre les dates">
+            <button id="mobilePrevDayBtn" class="mobile-day-nav-button" type="button" aria-label="Jour précédent">
+                <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <div id="mobileDateStrip" class="mobile-date-strip"></div>
+            <button id="mobileNextDayBtn" class="mobile-day-nav-button" type="button" aria-label="Jour suivant">
+                <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+        </div>
+
+        <div class="timeline-track">
+            <div id="timelineGrid"></div>
+            <div class="timeline-end-marker" aria-hidden="true">
+                <div class="timeline-end-spacer">
+                    <span class="timeline-time">20:00</span>
                 </div>
+                <div class="flex-1"></div>
+            </div>
         </div>
     </div>
 </div>
