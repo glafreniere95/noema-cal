@@ -2,6 +2,11 @@
 
 const API_URL = "/api/v2/availability";
 
+const START_HOUR = 8;
+const END_HOUR = 22;
+const SLOT_MINUTES = 30;
+const SLOT_COUNT = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
+
 let dataByDate = {}; 
 let currentBaseDate = new Date();
 currentBaseDate.setDate(1);
@@ -13,12 +18,17 @@ let isCurrentDayFullBlocked = false;
 const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const WEEKDAYS_FR = ["DI", "LU", "MA", "ME", "JE", "VE", "SA"];
 
-// Générer les heures de 08:00 à 19:30
+// Générer les créneaux de 30 minutes de 08:00 à 21:30.
 const timeSlots = [];
-for (let i = 0; i < 24; i++) {
-    const h = Math.floor(i / 2) + 8;
-    const m = i % 2 === 0 ? "00" : "30";
-    timeSlots.push(`${h.toString().padStart(2, '0')}:${m}`);
+
+for (let i = 0; i < SLOT_COUNT; i++) {
+    const totalMinutes = (START_HOUR * 60) + (i * SLOT_MINUTES);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+
+    timeSlots.push(
+        `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+    );
 }
 
 function pad(n) { return n.toString().padStart(2, "0"); }
