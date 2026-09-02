@@ -2,6 +2,11 @@
 
 const API_URL = "/api/v2/availability";
 
+const START_HOUR = 8;
+const END_HOUR = 22;
+const SLOT_MINUTES = 30;
+const SLOT_COUNT = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
+
 let dataByDate = {}; // Format: { "YYYY-MM-DD": { blockedSlots: [], isFullDayBlocked: false } }
 let currentBaseDate = new Date();
 currentBaseDate.setDate(1);
@@ -54,11 +59,13 @@ function formatHours(hours) {
     return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
-// Convertit un index (0 à 23) en heure "HH:mm" (de 08:00 à 19:30)
+// Convertit un index de créneau en heure "HH:mm" dans la plage configurée.
 function indexToTime(index) {
-    const hour = Math.floor(index / 2) + 8;
-    const min = index % 2 === 0 ? "00" : "30";
-    return `${pad(hour)}:${min}`;
+    const totalMinutes = (START_HOUR * 60) + (index * SLOT_MINUTES);
+    const hour = Math.floor(totalMinutes / 60);
+    const min = totalMinutes % 60;
+
+    return `${pad(hour)}:${pad(min)}`;
 }
 
 // Calcule les blocs disponibles pour une journée spécifique.
@@ -67,50 +74,83 @@ function calculateDailySlots(dateKey) {
     const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
     const minSlotsRequired = isWeekend ? 8 : 4; // 8 slots = 4h, 4 slots = 2h
 
-    const slots = new Array(24).fill("available");
-    const dayData = dataByDate[dateKey] || { blockedSlots: [], isFullDayBlocked: false };
+    const slots = new Array(SLOT_COUNT).fill("available");
+    const dayData = dataByDate[dateKey] || {
+        blockedSlots: [],
+        isFullDayBlocked: false
+    };
 
     if (dayData.isFullDayBlocked) {
-        return new Array(24).fill("unavailable");
+        return new Array(SLOT_COUNT).fill("unavailable");
     }
 
     // 1. Placer les blocages de l'admin.
     const blockedSet = new Set(dayData.blockedSlots || []);
-    for (let i = 0; i < 24; i++) {
+
+    for (let i = 0; i < SLOT_COUNT; i++) {
         if (blockedSet.has(indexToTime(i))) {
             slots[i] = "booked";
         }
     }
 
     // 2. Appliquer le tampon de ménage de 1h après chaque réservation.
-    for (let i = 0; i < 23; i++) {
+    for (let i = 0; i < SLOT_COUNT - 1; i++) {
         if (slots[i] === "booked" && slots[i + 1] !== "booked") {
-            if (i + 1 < 24) slots[i + 1] = "cleaning";
-            if (i + 2 < 24 && slots[i + 2] !== "booked") slots[i + 2] = "cleaning";
+            if (i + 1 < SLOT_COUNT) {
+                slots[i + 1] = "cleaning";
+            }
+
+            if (
+                i + 2 < SLOT_COUNT &&
+                slots[i + 2] !== "booked"
+            ) {
+                slots[i + 2] = "cleaning";
+            }
         }
     }
 
     // 3. Appliquer la contrainte de durée minimale.
     let currentFreeChunk = [];
-    for (let i = 0; i <= 24; i++) {
-        if (i < 24 && slots[i] === "available") {
+
+    for (let i = 0; i <= SLOT_COUNT; i++) {
+        if (i < SLOT_COUNT && slots[i] === "available") {
             currentFreeChunk.push(i);
         } else {
-            if (currentFreeChunk.length > 0 && currentFreeChunk.length < minSlotsRequired) {
+            if (
+                currentFreeChunk.length > 0 &&
+                currentFreeChunk.length < minSlotsRequired
+            ) {
                 currentFreeChunk.forEach((idx) => {
                     slots[idx] = "system_blocked";
                 });
             }
+
             currentFreeChunk = [];
         }
     }
 
     // Uniformiser les statuts bloqués pour l'UI.
-    return slots.map((status) => status === "available" ? "available" : "unavailable");
+    return slots.map((status) =>
+        status === "available" ? "available" : "unavailable"
+    );
 }
 
-function hasAvailability(dateKey) {
-    return calculateDailySlots(dateKey).includes("available");
+// État global de la journée utilisé dans le calendrier public.
+function getAvailabilityState(dateKey) {
+    const slots = calculateDailySlots(dateKey);
+    const availableSlots = slots.filter(
+        (status) => status === "available"
+    ).length;
+
+    if (availableSlots === 0) {
+        return "unavailable";
+    }
+
+    if (availableSlots === slots.length) {
+        return "available";
+    }
+
+    return "partial";
 }
 
 // --- 2. CHARGEMENT DES DONNÉES ---
@@ -243,7 +283,7 @@ function buildMonthSection(monthDate, showTitle) {
             button.classList.add("day-past");
             button.disabled = true;
         } else {
-            button.classList.add(hasAvailability(dateKey) ? "day-available" : "day-unavailable");
+            button.classList.add(`day-${getAvailabilityState(dateKey)}`);
 
             if (dateKey === selectedDateKey) {
                 button.classList.add("day-selected");
@@ -347,9 +387,9 @@ function renderTimeline(dateKey, dateObj, { direction = 0, animate = true } = {}
 
     const slots = calculateDailySlots(dateKey);
 
-    // Les 24 demi-heures de 08:00 à 20:00 représentent exactement 12 heures.
+    // La plage configurée va de 08:00 à 22:00, soit 14 heures au total.
     const totalFreeSlots = slots.filter((status) => status === "available").length;
-    totalFreeLabel.textContent = `${formatHours(totalFreeSlots * 0.5)} hours available`;
+    totalFreeLabel.textContent = `${formatHours((totalFreeSlots * SLOT_MINUTES) / 60)} hours available`;
 
     const chunks = buildTimelineChunks(slots);
 
@@ -427,14 +467,14 @@ function buildTimelineChunks(slots) {
 
 function createTimelineChunk(chunk) {
     const startTime = indexToTime(chunk.startIdx);
-    const hoursDuration = chunk.durationSlots * 0.5;
+    const hoursDuration = (chunk.durationSlots * SLOT_MINUTES) / 60;
 
     const block = document.createElement("div");
     block.className = "timeline-chunk";
     block.dataset.slots = String(chunk.durationSlots);
 
     // Chaque tranche prend une portion exacte de la hauteur disponible.
-    // Les 24 demi-heures remplissent donc toujours 08:00 à 20:00 sans scroll.
+    // Tous les créneaux remplissent toujours la plage configurée sans scroll.
     block.style.flex = `${chunk.durationSlots} 1 0`;
 
     const axis = document.createElement("div");
@@ -533,7 +573,7 @@ function renderMobileDateNavigator(selectedDate, { smooth = true } = {}) {
             button.classList.add("past");
             button.disabled = true;
         } else {
-            button.classList.add(hasAvailability(dateKey) ? "available" : "unavailable");
+            button.classList.add(getAvailabilityState(dateKey));
             button.addEventListener("click", () => {
                 const currentDate = selectedDateKey ? fromKey(selectedDateKey) : selectedDate;
                 const direction = dateObj > currentDate ? 1 : dateObj < currentDate ? -1 : 0;
