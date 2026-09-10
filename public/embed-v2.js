@@ -201,16 +201,8 @@ function renderCalendar({ animate = false } = {}) {
     monthLabel.textContent = `${MONTHS_FR[baseMonth.getMonth()]} ${baseMonth.getFullYear()}`;
     root.innerHTML = "";
 
-    // Mobile: deux mois consécutifs verticalement.
-    if (isMobileLayout()) {
-        root.appendChild(buildMonthSection(baseMonth, false));
-
-        const nextMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 1);
-        root.appendChild(buildMonthSection(nextMonth, true));
-    } else {
-        // Tablette et desktop: un mois, avec la timeline visible à droite.
-        root.appendChild(buildMonthSection(baseMonth, false));
-    }
+    // Un seul mois à la fois sur mobile, tablette et desktop.
+    root.appendChild(buildMonthSection(baseMonth, false));
 
     if (animate) {
         animateCalendarRefresh();
