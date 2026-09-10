@@ -389,7 +389,7 @@ function renderTimeline(dateKey, dateObj, { direction = 0, animate = true } = {}
 
     // La plage configurée va de 08:00 à 22:00, soit 14 heures au total.
     const totalFreeSlots = slots.filter((status) => status === "available").length;
-    totalFreeLabel.textContent = `${formatHours((totalFreeSlots * SLOT_MINUTES) / 60)} hours available`;
+    totalFreeLabel.textContent = `${formatHours((totalFreeSlots * SLOT_MINUTES) / 60)} h disponibles`;
 
     const chunks = buildTimelineChunks(slots);
 
@@ -505,11 +505,11 @@ function createTimelineChunk(chunk) {
 
         const label = document.createElement("span");
         label.className = "timeline-card-label";
-        label.textContent = "Available";
+        label.textContent = "Disponible";
 
         const detail = document.createElement("span");
         detail.className = "timeline-card-detail";
-        detail.textContent = `${formatHours(hoursDuration)} Hours Free`;
+        detail.textContent = `${formatHours(hoursDuration)} h disponibles`;
 
         statusRow.appendChild(dot);
         statusRow.appendChild(label);
@@ -518,7 +518,7 @@ function createTimelineChunk(chunk) {
     } else {
         const label = document.createElement("span");
         label.className = "timeline-card-label";
-        label.textContent = "Unavailable";
+        label.textContent = "Indisponible";
         card.appendChild(label);
     }
 
