@@ -14,7 +14,7 @@ currentBaseDate.setHours(0, 0, 0, 0);
 
 let selectedDateKey = null;
 let mobileCalendarScrollY = 0;
-let wasMobileLayout = window.matchMedia("(max-width: 1024px)").matches;
+let wasMobileLayout = window.matchMedia("(max-width: 767px)").matches;
 let resizeFrame = null;
 let timelineCloseTimer = null;
 
@@ -48,7 +48,7 @@ function getToday() {
 }
 
 function isMobileLayout() {
-    return window.matchMedia("(max-width: 1024px)").matches;
+    return window.matchMedia("(max-width: 767px)").matches;
 }
 
 function prefersReducedMotion() {
@@ -201,14 +201,14 @@ function renderCalendar({ animate = false } = {}) {
     monthLabel.textContent = `${MONTHS_FR[baseMonth.getMonth()]} ${baseMonth.getFullYear()}`;
     root.innerHTML = "";
 
-    // Mobile et tablette: deux mois consécutifs verticalement.
+    // Mobile: deux mois consécutifs verticalement.
     if (isMobileLayout()) {
         root.appendChild(buildMonthSection(baseMonth, false));
 
         const nextMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 1);
         root.appendChild(buildMonthSection(nextMonth, true));
     } else {
-        // Desktop: un mois, avec la timeline visible à droite.
+        // Tablette et desktop: un mois, avec la timeline visible à droite.
         root.appendChild(buildMonthSection(baseMonth, false));
     }
 
